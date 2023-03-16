@@ -8,6 +8,7 @@ We also plot the INT- and EXT-values.
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
+import math
 
 #   where to save outputs
 save_to_csv = './csv_files/'
@@ -22,14 +23,30 @@ part.head()     # to display the first 5 lines of loaded data
 
 words = pd.read_csv('.\csv_files\words.csv', sep=";")
 words.head()     # to display the first 5 lines of loaded data
+missing_words = pd.read_csv('.\csv_files\missing_words_karen.csv', sep=";")
 
-prod = pd.read_csv('.\csv_files\observ.csv', sep=",")
-prod.head()     # to display the first 5 lines of loaded data
+prod = pd.read_csv('.\csv_files\observ_reduced.csv', sep=",", index_col=0)
 
 #   import files
 LD = pd.read_csv('.\csv_files\LD_norm.csv', sep=",", header=int(), index_col=0)
 
+
+''' add missing words to the word df '''
+words_IPA_nlb = words.IPA_nlb.tolist()
+j = 0
+for i in range(0, len(words_IPA_nlb)):
+    if type(words_IPA_nlb[i]) is float:
+        words_IPA_nlb[i] = missing_words.iat[j,1]
+        j += 1
+
+words.IPA_nlb = words_IPA_nlb
 IPA_lst = LD.columns.tolist()
+IPA_lst_o = LD.columns.tolist()
+
+""" change col names to the full words list """
+
+prod = prod.set_axis([['child_id', 'observ_id', 'age', 'production'] + IPA_lst], axis=1)
+prod.head()     # to display the first 5 lines of loaded data
 
 
 """ Frequency file """
@@ -48,23 +65,6 @@ while line:
 frequ_df = pd.DataFrame({"freq": freq, "word": word})
 frequ_df = frequ_df.set_index('word')
 print(frequ_df.head)
-
-
-""" Production File """
-#   change "produces" to "1" and "NaN" to "0"
-prod = prod.replace('produces', 1)
-prod = prod.replace(np.nan, 0)
-
-#   we dropped some words which are not useful for our analysis, so we also have to drop them here
-num_item_id = []
-for word_id in words.num_item_id.tolist():
-    num_item_id.append(str(word_id))
-final_columns = num_item_id + ['original_id', 'data_id', 'age', 'production']
-prod_reduced = prod.drop(columns=[col for col in prod if col not in final_columns])
-prod_reduced = prod_reduced.set_axis([['child_id', 'observ_id', 'age', 'production'] + IPA_lst],
-                                     axis=1)
-
-prod_reduced.head()     # to display the first 5 lines of loaded data
 
 
 """
@@ -105,12 +105,12 @@ def get_word_length(ipa_source):
             word_length_lst.append(len(w))
     return word_length_lst
 
+
 word_length_nlb = get_word_length(words.IPA_nlb)
-word_length_ipa_lst_final = get_word_length(IPA_lst)
-
 words['IPA_length_nlb'] = word_length_nlb
-words['IPA_length_final'] = word_length_ipa_lst_final
 
+words['IPA_lst'] = IPA_lst_o
+words.set_index('IPA_lst')
 
 """
 3. Get frequency of words (from Norwegian Web As Corpus)
@@ -172,23 +172,23 @@ Edit: Not used in the end.
 
 gaps_lst = []
 
-for i in range(0, len(prod_reduced)):
+for i in range(0, len(prod)):
     if i == 0:
         diff = None
         gaps_lst.append(diff)
     else:
-        child = prod_reduced.iloc[i]['child_id']
-        child_obs_before = prod_reduced.iloc[i - 1]['child_id']
+        child = prod.iloc[i]['child_id']
+        child_obs_before = prod.iloc[i - 1]['child_id']
         if child == child_obs_before:
-            diff = prod_reduced.iloc[i]['age'] - prod_reduced.iloc[i-1]['age']
+            diff = prod.iloc[i]['age'] - prod.iloc[i-1]['age']
             gaps_lst.append(diff)
         else:
             #   set difference = None for initial observation for each child
             diff = None
             gaps_lst.append(diff)
 
-prod_reduced.insert(4, 'obs_gap', gaps_lst)
-prod_reduced.to_csv(save_to_csv + 'observ_reduced.csv')
+prod.insert(4, 'obs_gap', gaps_lst)
+prod.to_csv(save_to_csv + 'observ_reduced.csv')
 
 
 """
@@ -208,23 +208,23 @@ Edit: Not used in the end.
 child_id_lst = list(dict.fromkeys(prod.original_id.tolist()))
 AoP_df = pd.DataFrame(columns=LD.columns, index=child_id_lst)
 ##
-for row in range(len(prod_reduced.index)):
+for row in range(len(prod.index)):
     for word in LD.columns:
-        if prod_reduced.iloc[row][word] == 1:
+        if prod.iloc[row][word] == 1:
             if row == 0:
-                a = prod_reduced.iloc[row]['child_id']
-                AoP_df.loc[int(a)][word] = prod_reduced.iloc[row]['age']
-                print(prod_reduced.iloc[row]['age'])
+                a = prod.iloc[row]['child_id']
+                AoP_df.loc[int(a)][word] = prod.iloc[row]['age']
+                print(prod.iloc[row]['age'])
             else:
-                if prod_reduced.iloc[row]['child_id'] == prod_reduced.iloc[row - 1]['child_id']:
-                    if prod_reduced.iloc[row-1][word] == 0:
-                        a = prod_reduced.iloc[row]['child_id']
-                        AoP_df.loc[int(a)][word] = prod_reduced.iloc[row]['age']
-                        print(prod_reduced.iloc[row]['age'])
+                if prod.iloc[row]['child_id'] == prod.iloc[row - 1]['child_id']:
+                    if prod.iloc[row-1][word] == 0:
+                        a = prod.iloc[row]['child_id']
+                        AoP_df.loc[int(a)][word] = prod.iloc[row]['age']
+                        print(prod.iloc[row]['age'])
                 else:
-                    a = prod_reduced.iloc[row]['child_id']
-                    AoP_df.loc[int(a)][word] = prod_reduced.iloc[row]['age']
-                    print(prod_reduced.iloc[row]['age'])
+                    a = prod.iloc[row]['child_id']
+                    AoP_df.loc[int(a)][word] = prod.iloc[row]['age']
+                    print(prod.iloc[row]['age'])
 
 AoP_df.to_csv(save_to_csv + 'AoP_df.csv')
 
@@ -235,7 +235,7 @@ AoP_df.to_csv(save_to_csv + 'AoP_df.csv')
 
 """ Gap between two observations of the same child """
 
-obs_gaps_df = pd.DataFrame(prod_reduced['obs_gap'].value_counts(sort=False), columns=['count'])
+obs_gaps_df = pd.DataFrame(prod['obs_gap'].value_counts(sort=False), columns=['count'])
 
 plt.bar(obs_gaps_df.index.get_level_values(0), obs_gaps_df['count'])
 plt.xlabel('gap size between two observations')
@@ -272,7 +272,7 @@ plt.show()
 
 
 """ Age of Children """
-children_age_df = pd.DataFrame(prod_reduced['age'].value_counts(sort=False), columns=['count'])
+children_age_df = pd.DataFrame(prod['age'].value_counts(sort=False), columns=['count'])
 
 plt.bar(children_age_df.index.get_level_values(0), children_age_df['count'])
 
@@ -311,9 +311,9 @@ plt.show()
 
 
 """ Production size per child/observation """
-children_prod_size_df = pd.DataFrame(prod_reduced['production'].value_counts(sort=False), columns=['count'])
+children_prod_size_df = pd.DataFrame(prod['production'].value_counts(sort=False), columns=['count'])
 
-plt.hist(prod_reduced['production'], bins=75)
+plt.hist(prod['production'], bins=75)
 
 plt.grid(True)
 
